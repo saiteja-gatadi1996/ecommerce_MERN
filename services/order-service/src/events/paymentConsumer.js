@@ -6,7 +6,7 @@ async function registerPaymentConsumer(channel) {
     channel,
     'order-service.payment-events',
     ['payment.paid', 'payment.failed'],
-    async (routingKey, payload) => {
+    async (payload, routingKey) => {
       const order = await Order.findById(payload.orderId);
       if (!order) return;
 
@@ -19,7 +19,7 @@ async function registerPaymentConsumer(channel) {
           orderId: order._id.toString(),
           userId: order.userId,
           items: order.items,
-          totalAmount: order.totalAmount
+          totalAmount: order.totalAmount,
         });
       } else {
         order.status = 'payment_failed';
@@ -29,11 +29,13 @@ async function registerPaymentConsumer(channel) {
         await publishEvent(channel, 'order.payment_failed', {
           orderId: order._id.toString(),
           userId: order.userId,
-          totalAmount: order.totalAmount
+          totalAmount: order.totalAmount,
         });
       }
 
-      console.log(`[order-service] handled ${routingKey} for order ${payload.orderId}`);
+      console.log(
+        `[order-service] handled ${routingKey} for order ${payload.orderId}`
+      );
     }
   );
 }
