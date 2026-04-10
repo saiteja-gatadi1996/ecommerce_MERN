@@ -1,8 +1,8 @@
 const Order = require('../models/Order');
-const { publishEvent, subscribeEvents } = require('@repo/event-bus');
+const { publishEvent, subscribeEvent } = require('@repo/event-bus');
 
 async function registerPaymentConsumer(channel) {
-  await subscribeEvents(
+  await subscribeEvent(
     channel,
     'order-service.payment-events',
     ['payment.paid', 'payment.failed'],

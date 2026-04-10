@@ -1,8 +1,8 @@
 const Product = require('../models/Product');
-const { subscribeEvents } = require('@repo/event-bus');
+const { subscribeEvent } = require('@repo/event-bus');
 
 async function registerOrderPaidConsumer(channel) {
-  await subscribeEvents(
+  await subscribeEvent(
     channel,
     'product-service.order-events',
     ['order.paid'],
@@ -18,7 +18,9 @@ async function registerOrderPaidConsumer(channel) {
         await product.save();
       }
 
-      console.log(`[product-service] handled ${routingKey} for order ${payload.orderId}`);
+      console.log(
+        `[product-service] handled ${routingKey} for order ${payload.orderId}`
+      );
     }
   );
 }

@@ -1,8 +1,8 @@
 const Notification = require('../models/Notification');
-const { subscribeEvents } = require('@repo/event-bus');
+const { subscribeEvent } = require('@repo/event-bus');
 
 async function registerNotificationConsumer(channel) {
-  await subscribeEvents(
+  await subscribeEvent(
     channel,
     'notification-service.all-events',
     ['user.registered', 'order.paid', 'order.payment_failed'],
@@ -31,10 +31,12 @@ async function registerNotificationConsumer(channel) {
         recipient,
         title,
         message,
-        payload
+        payload,
       });
 
-      console.log(`[notification-service] stored notification for ${routingKey}`);
+      console.log(
+        `[notification-service] stored notification for ${routingKey}`
+      );
     }
   );
 }
