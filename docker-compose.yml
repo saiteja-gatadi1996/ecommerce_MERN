@@ -1,0 +1,156 @@
+version: "3.9"
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    hostname: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  mongo-user:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_user_data:/data/db
+
+  mongo-product:
+    image: mongo:7
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo_product_data:/data/db
+
+  mongo-order:
+    image: mongo:7
+    ports:
+      - "27019:27017"
+    volumes:
+      - mongo_order_data:/data/db
+
+  mongo-payment:
+    image: mongo:7
+    ports:
+      - "27020:27017"
+    volumes:
+      - mongo_payment_data:/data/db
+
+  mongo-notification:
+    image: mongo:7
+    ports:
+      - "27021:27017"
+    volumes:
+      - mongo_notification_data:/data/db
+
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    environment:
+      PORT: 8080
+      JWT_SECRET: supersecret
+      USER_SERVICE_URL: http://user-service:4001
+      PRODUCT_SERVICE_URL: http://product-service:4002
+      ORDER_SERVICE_URL: http://order-service:4003
+      PAYMENT_SERVICE_URL: http://payment-service:4004
+      FRONTEND_ORIGIN: http://localhost:3000
+    ports:
+      - "8080:8080"
+    depends_on:
+      - user-service
+      - product-service
+      - order-service
+      - payment-service
+
+  user-service:
+    build:
+      context: .
+      dockerfile: services/user-service/Dockerfile
+    environment:
+      PORT: 4001
+      MONGO_URI: mongodb://mongo-user:27017/userdb
+      JWT_SECRET: supersecret
+      RABBITMQ_URL: amqp://rabbitmq
+      FRONTEND_ORIGIN: http://localhost:3000
+    depends_on:
+      - mongo-user
+      - rabbitmq
+
+  product-service:
+    build:
+      context: .
+      dockerfile: services/product-service/Dockerfile
+    environment:
+      PORT: 4002
+      MONGO_URI: mongodb://mongo-product:27017/productdb
+      JWT_SECRET: supersecret
+      RABBITMQ_URL: amqp://rabbitmq
+      FRONTEND_ORIGIN: http://localhost:3000
+    depends_on:
+      - mongo-product
+      - rabbitmq
+
+  order-service:
+    build:
+      context: .
+      dockerfile: services/order-service/Dockerfile
+    environment:
+      PORT: 4003
+      MONGO_URI: mongodb://mongo-order:27017/orderdb
+      JWT_SECRET: supersecret
+      RABBITMQ_URL: amqp://rabbitmq
+      PRODUCT_SERVICE_URL: http://product-service:4002
+      PAYMENT_SERVICE_URL: http://payment-service:4004
+      FRONTEND_ORIGIN: http://localhost:3000
+    depends_on:
+      - mongo-order
+      - rabbitmq
+      - product-service
+      - payment-service
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: services/payment-service/Dockerfile
+    environment:
+      PORT: 4004
+      MONGO_URI: mongodb://mongo-payment:27017/paymentdb
+      JWT_SECRET: supersecret
+      RABBITMQ_URL: amqp://rabbitmq
+      FRONTEND_ORIGIN: http://localhost:3000
+    depends_on:
+      - mongo-payment
+      - rabbitmq
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    environment:
+      PORT: 4005
+      MONGO_URI: mongodb://mongo-notification:27017/notificationdb
+      JWT_SECRET: supersecret
+      RABBITMQ_URL: amqp://rabbitmq
+      FRONTEND_ORIGIN: http://localhost:3000
+    depends_on:
+      - mongo-notification
+      - rabbitmq
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+    environment:
+      VITE_API_BASE_URL: http://localhost:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      - gateway
+
+volumes:
+  mongo_user_data:
+  mongo_product_data:
+  mongo_order_data:
+  mongo_payment_data:
+  mongo_notification_data:

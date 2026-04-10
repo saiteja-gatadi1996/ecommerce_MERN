@@ -1,0 +1,19 @@
+{
+  "name": "ecommerce-mern-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev:user": "cd services/user-service && npm run start",
+    "dev:product": "cd services/product-service && npm run start",
+    "dev:order": "cd services/order-service && npm run start",
+    "dev:payment": "cd services/payment-service && npm run start",
+    "dev:notification": "cd services/notification-service && npm run start",
+    "dev:gateway": "cd gateway && npm run start",
+    "dev:frontend": "cd apps/frontend && npm run start",
+    "dev:backend": "concurrently -n user,product,order,payment,notification,gateway -c blue,green,yellow,magenta,cyan,white \"npm run dev:user\" \"npm run dev:product\" \"npm run dev:order\" \"npm run dev:payment\" \"npm run dev:notification\" \"npm run dev:gateway\"",
+    "dev": "concurrently -n user,product,order,payment,notification,gateway,frontend -c blue,green,yellow,magenta,cyan,white,red \"npm run dev:user\" \"npm run dev:product\" \"npm run dev:order\" \"npm run dev:payment\" \"npm run dev:notification\" \"npm run dev:gateway\" \"npm run dev:frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
+}
