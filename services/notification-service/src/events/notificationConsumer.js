@@ -1,42 +1,68 @@
 const Notification = require('../models/Notification');
 const { subscribeEvent } = require('@repo/event-bus');
 
+function getNotificationContent(routingKey, payload) {
+  switch (routingKey) {
+    case 'user.registered':
+      return {
+        title: 'User Registered',
+        message: `New user registered: ${payload.name} (${payload.email})`,
+      };
+
+    case 'payment.paid':
+      return {
+        title: 'Payment Successful',
+        message: `Payment completed for order ${payload.orderId}`,
+      };
+
+    case 'payment.failed':
+      return {
+        title: 'Payment Failed',
+        message: `Payment failed for order ${payload.orderId}`,
+      };
+
+    case 'order.paid':
+      return {
+        title: 'Order Paid',
+        message: `Order ${payload.orderId} has been marked as paid`,
+      };
+
+    case 'order.payment_failed':
+      return {
+        title: 'Order Payment Failed',
+        message: `Order ${payload.orderId} payment failed`,
+      };
+
+    default:
+      return {
+        title: 'System Event',
+        message: `Received event ${routingKey}`,
+      };
+  }
+}
+
 async function registerNotificationConsumer(channel) {
   await subscribeEvent(
     channel,
-    'notification-service.all-events',
-    ['user.registered', 'order.paid', 'order.payment_failed'],
-    async (routingKey, payload) => {
-      let title = 'Platform update';
-      let message = 'An event was received';
-      let recipient = payload.email || payload.userId || '';
-
-      if (routingKey === 'user.registered') {
-        title = 'Welcome to the platform';
-        message = `User ${payload.name} registered successfully.`;
-      }
-
-      if (routingKey === 'order.paid') {
-        title = 'Order confirmed';
-        message = `Order ${payload.orderId} has been paid successfully.`;
-      }
-
-      if (routingKey === 'order.payment_failed') {
-        title = 'Payment failed';
-        message = `Payment failed for order ${payload.orderId}.`;
-      }
+    'notification-service.events',
+    [
+      'payment.paid',
+      'payment.failed',
+      'order.paid',
+      'order.payment_failed',
+      'user.registered',
+    ],
+    async (payload, routingKey) => {
+      const { title, message } = getNotificationContent(routingKey, payload);
 
       await Notification.create({
-        eventType: routingKey,
-        recipient,
         title,
         message,
+        eventType: routingKey,
         payload,
       });
 
-      console.log(
-        `[notification-service] stored notification for ${routingKey}`
-      );
+      console.log(`[notification-service] stored ${routingKey}`);
     }
   );
 }

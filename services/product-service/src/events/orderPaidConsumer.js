@@ -6,16 +6,13 @@ async function registerOrderPaidConsumer(channel) {
     channel,
     'product-service.order-events',
     ['order.paid'],
-    async (routingKey, payload) => {
-      const items = payload.items || [];
+    async (payload, routingKey) => {
+      if (routingKey !== 'order.paid') return;
 
-      for (const item of items) {
-        const product = await Product.findById(item.productId);
-        if (!product) continue;
-
-        const newStock = Math.max(0, product.stock - item.quantity);
-        product.stock = newStock;
-        await product.save();
+      for (const item of payload.items || []) {
+        await Product.findByIdAndUpdate(item.productId, {
+          $inc: { stock: -item.quantity },
+        });
       }
 
       console.log(

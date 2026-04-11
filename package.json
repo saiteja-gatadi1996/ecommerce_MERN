@@ -9,9 +9,14 @@
     "dev:payment": "cd services/payment-service && npm run start",
     "dev:notification": "cd services/notification-service && npm run start",
     "dev:gateway": "cd gateway && npm run start",
-    "dev:frontend": "cd apps/frontend && npm run start",
+    "dev:host": "cd apps/frontend && npm run dev",
+    "dev:auth-mfe": "cd auth-mfe && npm run dev",
+    "dev:catalog-mfe": "cd catalog-mfe && npm run dev",
+    "dev:checkout-mfe": "cd checkout-mfe && npm run dev",
+    "dev:orders-mfe": "cd orders-mfe && npm run dev",
     "dev:backend": "concurrently -n user,product,order,payment,notification,gateway -c blue,green,yellow,magenta,cyan,white \"npm run dev:user\" \"npm run dev:product\" \"npm run dev:order\" \"npm run dev:payment\" \"npm run dev:notification\" \"npm run dev:gateway\"",
-    "dev": "concurrently -n user,product,order,payment,notification,gateway,frontend -c blue,green,yellow,magenta,cyan,white,red \"npm run dev:user\" \"npm run dev:product\" \"npm run dev:order\" \"npm run dev:payment\" \"npm run dev:notification\" \"npm run dev:gateway\" \"npm run dev:frontend\""
+    "dev:mfes": "concurrently -n host,auth,catalog,checkout,orders -c red,blue,green,yellow,magenta \"npm run dev:host\" \"npm run dev:auth-mfe\" \"npm run dev:catalog-mfe\" \"npm run dev:checkout-mfe\" \"npm run dev:orders-mfe\"",
+    "dev": "concurrently -n user,product,order,payment,notification,gateway,host,auth,catalog,checkout,orders -c blue,green,yellow,magenta,cyan,white,red,blueBright,greenBright,yellowBright,magentaBright \"npm run dev:user\" \"npm run dev:product\" \"npm run dev:order\" \"npm run dev:payment\" \"npm run dev:notification\" \"npm run dev:gateway\" \"npm run dev:host\" \"npm run dev:auth-mfe\" \"npm run dev:catalog-mfe\" \"npm run dev:checkout-mfe\" \"npm run dev:orders-mfe\""
   },
   "devDependencies": {
     "concurrently": "^9.0.1"

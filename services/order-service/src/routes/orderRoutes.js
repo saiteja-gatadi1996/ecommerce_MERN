@@ -6,6 +6,7 @@ const router = express.Router();
 
 router.use(requireAuth);
 router.post('/', createOrder);
+router.get('/', listMyOrders);
 router.get('/mine', listMyOrders);
 
 module.exports = router;
