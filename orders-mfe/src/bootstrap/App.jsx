@@ -1,59 +1,107 @@
 import React, { useEffect, useState } from 'react';
-import { authHeaders, request } from '../lib/api';
+import '../styles/orders.css';
 
-export default function App() {
+function getStoredAuth() {
+  const raw = localStorage.getItem('mf_auth');
+  return raw ? JSON.parse(raw) : null;
+}
+
+export default function App({ apiBaseUrl }) {
   const [orders, setOrders] = useState([]);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
+    const auth = getStoredAuth();
+
+    if (!auth?.token) {
+      setMessage('Please login to view orders.');
+      return undefined;
+    }
+
     let active = true;
 
-    async function load() {
+    async function loadOrders() {
       try {
-        const data = await request('/api/orders', { headers: { ...authHeaders() } });
-        if (active) {
-          setOrders(data);
-          setMessage('');
+        const response = await fetch(`${apiBaseUrl}/api/orders`, {
+          headers: {
+            Authorization: `Bearer ${auth.token}`,
+          },
+        });
+
+        const data = await response.json();
+
+        if (!active) return;
+
+        if (!response.ok) {
+          setMessage(data?.message || 'Unable to load orders.');
+          return;
         }
+
+        setOrders(Array.isArray(data) ? data : []);
       } catch (error) {
-        if (active) setMessage(error.message);
+        if (!active) return;
+        setMessage('Unable to load orders.');
       }
     }
 
-    load();
-    const id = window.setInterval(load, 3500);
+    loadOrders();
+    const intervalId = setInterval(loadOrders, 3000);
+
     return () => {
       active = false;
-      window.clearInterval(id);
+      clearInterval(intervalId);
     };
-  }, []);
+  }, [apiBaseUrl]);
 
   return (
-    <div className="stack">
-      <p className="section-subtitle">This page auto-refreshes so you can see the async payment → order → inventory flow.</p>
-      {message && <div className="message error">{message}</div>}
-      <div className="stack">
-        {orders.map((order) => (
-          <section key={order._id} className="card" style={{ padding: 24 }}>
-            <div className="inline" style={{ justifyContent: 'space-between' }}>
-              <div>
-                <h3 style={{ margin: 0 }}>Order #{String(order._id).slice(-6)}</h3>
-                <p style={{ color: 'var(--muted)' }}>Status: {order.status}</p>
-              </div>
-              <strong style={{ fontSize: 20 }}>₹{order.totalAmount}</strong>
-            </div>
-            <div className="stack">
-              {order.items?.map((item) => (
-                <article key={item.productId} className="inline" style={{ justifyContent: 'space-between' }}>
-                  <span>{item.title || item.productName || item.productId}</span>
-                  <span>{item.quantity} × ₹{item.price}</span>
-                </article>
-              ))}
-            </div>
-          </section>
-        ))}
-        {!orders.length && !message && <div className="card" style={{ padding: 24 }}>No orders yet.</div>}
+    <section className='orders-page'>
+      <div className='page-card'>
+        <h1 className='page-title'>Your Orders</h1>
+        <p className='page-subtitle'>
+          This page auto-refreshes so you can see the async payment flow
+          updates.
+        </p>
+
+        {message ? (
+          <div className='message message-error'>{message}</div>
+        ) : null}
+
+        {!orders.length ? (
+          <p>No orders found yet.</p>
+        ) : (
+          <div className='orders-list'>
+            {orders.map((order) => (
+              <article key={order._id} className='order-card'>
+                <div className='order-card__top'>
+                  <div>
+                    <div className='order-card__id'>
+                      Order #{order._id.slice(-8)}
+                    </div>
+                    <div className='order-card__status'>
+                      Status: {order.status}
+                    </div>
+                  </div>
+                  <div className='order-card__total'>₹{order.totalAmount}</div>
+                </div>
+
+                <div className='order-card__items'>
+                  {(order.items || []).map((item, index) => (
+                    <div
+                      key={`${item.productId}-${index}`}
+                      className='order-card__item'
+                    >
+                      <span>{item.name}</span>
+                      <span>
+                        {item.quantity} × ₹{item.price}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </div>
-    </div>
+    </section>
   );
 }

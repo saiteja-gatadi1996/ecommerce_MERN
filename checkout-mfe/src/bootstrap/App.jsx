@@ -1,96 +1,137 @@
-import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { authHeaders, getStoredAuth, request } from '../lib/api';
+import React, { useEffect, useMemo, useState } from 'react';
+import '../styles/checkout.css';
 
-function readCart() {
-  try { return JSON.parse(localStorage.getItem('mf_cart') || '[]'); }
-  catch (error) { return []; }
+function getCart() {
+  const raw = localStorage.getItem('mf_cart');
+  return raw ? JSON.parse(raw) : [];
 }
 
-function writeCart(cart) {
-  localStorage.setItem('mf_cart', JSON.stringify(cart));
-  localStorage.setItem('mf_cart_count', String(cart.reduce((sum, item) => sum + item.quantity, 0)));
+function getStoredAuth() {
+  const raw = localStorage.getItem('mf_auth');
+  return raw ? JSON.parse(raw) : null;
 }
 
-export default function App() {
-  const navigate = useNavigate();
-  const [cart, setCart] = useState(readCart());
-  const [paymentMethod, setPaymentMethod] = useState('mock-card');
+function getTotal(cart) {
+  return cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+}
+
+export default function App({ apiBaseUrl }) {
+  const [cart, setCart] = useState(getCart());
   const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [placingOrder, setPlacingOrder] = useState(false);
 
-  const totalAmount = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.quantity, 0), [cart]);
+  useEffect(() => {
+    const syncCart = () => setCart(getCart());
+    window.addEventListener('mf-cart-changed', syncCart);
+    return () => window.removeEventListener('mf-cart-changed', syncCart);
+  }, []);
 
-  function updateQuantity(productId, nextQuantity) {
-    const next = cart.map((item) => (item.productId === productId ? { ...item, quantity: Math.max(1, nextQuantity) } : item));
-    setCart(next);
-    writeCart(next);
-  }
+  const total = useMemo(() => getTotal(cart), [cart]);
 
-  async function checkout() {
+  async function placeOrder() {
     const auth = getStoredAuth();
+
     if (!auth?.token) {
-      setMessage('Please login before checkout.');
-      navigate('/login');
+      setMessage('Please login to continue.');
       return;
     }
+
     if (!cart.length) {
-      setMessage('Your cart is empty.');
+      setMessage('Cart is empty.');
       return;
     }
-    setLoading(true);
+
     setMessage('');
+    setPlacingOrder(true);
+
     try {
-      const payload = { items: cart.map((item) => ({ productId: item.productId, quantity: item.quantity })), paymentMethod };
-      await request('/api/orders', { method: 'POST', headers: { ...authHeaders() }, body: JSON.stringify(payload) });
-      writeCart([]);
-      setCart([]);
-      setMessage('Order created. Redirecting to orders...');
-      setTimeout(() => navigate('/orders'), 800);
+      const response = await fetch(`${apiBaseUrl}/api/orders`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${auth.token}`,
+        },
+        body: JSON.stringify({
+          items: cart,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setMessage(data?.message || 'Unable to place order.');
+        return;
+      }
+
+      localStorage.removeItem('mf_cart');
+      localStorage.setItem('mf_cart_count', '0');
+      window.dispatchEvent(new Event('mf-cart-changed'));
+      window.location.href = '/orders';
     } catch (error) {
-      setMessage(error.message);
+      setMessage('Unable to place order.');
     } finally {
-      setLoading(false);
+      setPlacingOrder(false);
     }
   }
 
   return (
-    <div className="stack">
-      <section className="card" style={{ padding: 24 }}>
-        <h2 style={{ marginTop: 0 }}>Cart summary</h2>
-        {!cart.length && <p style={{ color: 'var(--muted)' }}>Add products from the catalog before checkout.</p>}
-        <div className="stack">
-          {cart.map((item) => (
-            <article key={item.productId} className="card" style={{ padding: 16, background: 'rgba(2,6,23,0.6)', borderRadius: 14 }}>
-              <div className="inline" style={{ justifyContent: 'space-between' }}>
-                <strong>{item.title}</strong>
-                <span>₹{item.price * item.quantity}</span>
-              </div>
-              <div className="inline">
-                <button className="btn secondary" onClick={() => updateQuantity(item.productId, item.quantity - 1)}>-</button>
-                <span>Qty: {item.quantity}</span>
-                <button className="btn secondary" onClick={() => updateQuantity(item.productId, item.quantity + 1)}>+</button>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-      <section className="card" style={{ padding: 24 }}>
-        <h2 style={{ marginTop: 0 }}>Payment</h2>
-        <div className="form-grid">
-          <select className="select" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-            <option value="mock-card">Mock Card</option>
-            <option value="mock-upi">Mock UPI</option>
-            <option value="mock-wallet">Mock Wallet</option>
-          </select>
-          <div className="inline" style={{ justifyContent: 'space-between' }}>
-            <strong>Total</strong>
-            <strong>₹{totalAmount}</strong>
+    <section className='checkout-layout'>
+      <div className='checkout-left page-card'>
+        <h1 className='page-title'>Checkout</h1>
+        <p className='page-subtitle'>Review your cart and place the order.</p>
+
+        {!cart.length ? (
+          <p>Your cart is empty.</p>
+        ) : (
+          <div className='checkout-items'>
+            {cart.map((item) => (
+              <article key={item.productId} className='checkout-item'>
+                <div className='checkout-item__name'>{item.name}</div>
+                <div className='checkout-item__meta'>
+                  {item.quantity} × ₹{item.price}
+                </div>
+                <div className='checkout-item__price'>
+                  ₹{item.quantity * item.price}
+                </div>
+              </article>
+            ))}
           </div>
-          {message && <div className={message.includes('created') ? 'message success' : 'message error'}>{message}</div>}
-          <button className="btn success" disabled={loading || !cart.length} onClick={checkout}>{loading ? 'Creating order...' : 'Place order'}</button>
+        )}
+      </div>
+
+      <aside className='checkout-right page-card'>
+        <h2 className='checkout-summary__title'>Price Details</h2>
+
+        <div className='checkout-summary__row'>
+          <span>Total Items</span>
+          <span>{cart.reduce((sum, item) => sum + item.quantity, 0)}</span>
         </div>
-      </section>
-    </div>
+
+        <div className='checkout-summary__row'>
+          <span>Total Amount</span>
+          <span>₹{total}</span>
+        </div>
+
+        <div className='checkout-summary__divider' />
+
+        <div className='checkout-summary__row checkout-summary__row--highlight'>
+          <span>Payable</span>
+          <span>₹{total}</span>
+        </div>
+
+        {message ? (
+          <div className='message message-error'>{message}</div>
+        ) : null}
+
+        <button
+          type='button'
+          className='btn btn-primary checkout-place-order'
+          onClick={placeOrder}
+          disabled={placingOrder || !cart.length}
+        >
+          {placingOrder ? 'Processing...' : 'Place Order'}
+        </button>
+      </aside>
+    </section>
   );
 }
