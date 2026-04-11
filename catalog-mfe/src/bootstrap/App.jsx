@@ -2,11 +2,35 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import '../styles/catalog.css';
 
-function addToCart(product) {
+function getCart() {
   const raw = localStorage.getItem('mf_cart');
-  const cart = raw ? JSON.parse(raw) : [];
+  return raw ? JSON.parse(raw) : [];
+}
 
+function setCart(cart) {
+  localStorage.setItem('mf_cart', JSON.stringify(cart));
+  localStorage.setItem(
+    'mf_cart_count',
+    String(cart.reduce((sum, item) => sum + item.quantity, 0))
+  );
+  window.dispatchEvent(new Event('mf-cart-changed'));
+}
+
+function addToCart(product) {
+  if (!product?.stock || product.stock <= 0) {
+    return { ok: false, message: 'Product is out of stock.' };
+  }
+
+  const cart = getCart();
   const existing = cart.find((item) => item.productId === product._id);
+  const existingQty = existing ? existing.quantity : 0;
+
+  if (existingQty + 1 > product.stock) {
+    return {
+      ok: false,
+      message: `Only ${product.stock} item(s) available for ${product.title}.`,
+    };
+  }
 
   if (existing) {
     existing.quantity += 1;
@@ -19,15 +43,13 @@ function addToCart(product) {
     });
   }
 
-  localStorage.setItem('mf_cart', JSON.stringify(cart));
-  localStorage.setItem(
-    'mf_cart_count',
-    String(cart.reduce((sum, item) => sum + item.quantity, 0))
-  );
-  window.dispatchEvent(new Event('mf-cart-changed'));
+  setCart(cart);
+  return { ok: true };
 }
 
-function ProductCard({ product }) {
+function ProductCard({ product, onAdd }) {
+  const isOutOfStock = !product.stock || product.stock <= 0;
+
   return (
     <article className='catalog-card'>
       <Link
@@ -53,16 +75,25 @@ function ProductCard({ product }) {
         <div className='catalog-card__price'>₹{product.price}</div>
 
         <div className='catalog-card__meta'>
-          <span>Stock: {product.stock}</span>
+          {isOutOfStock ? (
+            <span className='stock-badge stock-badge--out'>Out of stock</span>
+          ) : product.stock <= 3 ? (
+            <span className='stock-badge stock-badge--low'>
+              Only {product.stock} left
+            </span>
+          ) : (
+            <span className='stock-badge stock-badge--in'>In stock</span>
+          )}
         </div>
 
         <div className='catalog-card__actions'>
           <button
             type='button'
             className='btn btn-secondary'
-            onClick={() => addToCart(product)}
+            onClick={() => onAdd(product)}
+            disabled={isOutOfStock}
           >
-            Add to Cart
+            {isOutOfStock ? 'Unavailable' : 'Add to Cart'}
           </button>
 
           <Link
@@ -110,6 +141,17 @@ function ProductList({ apiBaseUrl }) {
     };
   }, [apiBaseUrl]);
 
+  function handleAdd(product) {
+    const result = addToCart(product);
+    if (!result.ok) {
+      setMessage(result.message);
+      return;
+    }
+
+    setMessage(`${product.title} added to cart.`);
+    setTimeout(() => setMessage(''), 1800);
+  }
+
   const hasProducts = products.length > 0;
 
   return (
@@ -135,7 +177,17 @@ function ProductList({ apiBaseUrl }) {
         </button>
       </section>
 
-      {message ? <div className='message message-error'>{message}</div> : null}
+      {message ? (
+        <div
+          className={`message ${
+            message.toLowerCase().includes('added')
+              ? 'message-success'
+              : 'message-error'
+          }`}
+        >
+          {message}
+        </div>
+      ) : null}
 
       {loading ? <div className='page-card'>Loading products...</div> : null}
 
@@ -148,7 +200,11 @@ function ProductList({ apiBaseUrl }) {
       {!loading && hasProducts ? (
         <section className='catalog-grid'>
           {products.map((product) => (
-            <ProductCard key={product._id} product={product} />
+            <ProductCard
+              key={product._id}
+              product={product}
+              onAdd={handleAdd}
+            />
           ))}
         </section>
       ) : null}
@@ -210,6 +266,26 @@ function ProductDetails({ apiBaseUrl, productId }) {
     return <div className='page-card'>Product not found.</div>;
   }
 
+  const isOutOfStock = !product.stock || product.stock <= 0;
+
+  function handleAdd() {
+    const result = addToCart(product);
+    if (!result.ok) {
+      setMessage(result.message);
+      return;
+    }
+    setMessage(`${product.title} added to cart.`);
+  }
+
+  function handleBuyNow() {
+    const result = addToCart(product);
+    if (!result.ok) {
+      setMessage(result.message);
+      return;
+    }
+    navigate('/checkout');
+  }
+
   return (
     <section className='product-details page-card'>
       <div className='product-details__gallery'>
@@ -225,20 +301,19 @@ function ProductDetails({ apiBaseUrl, productId }) {
           <button
             type='button'
             className='btn btn-secondary'
-            onClick={() => addToCart(product)}
+            onClick={handleAdd}
+            disabled={isOutOfStock}
           >
-            Add to Cart
+            {isOutOfStock ? 'Unavailable' : 'Add to Cart'}
           </button>
 
           <button
             type='button'
             className='btn btn-primary'
-            onClick={() => {
-              addToCart(product);
-              navigate('/checkout');
-            }}
+            onClick={handleBuyNow}
+            disabled={isOutOfStock}
           >
-            Buy Now
+            {isOutOfStock ? 'Out of Stock' : 'Buy Now'}
           </button>
         </div>
       </div>
@@ -246,10 +321,32 @@ function ProductDetails({ apiBaseUrl, productId }) {
       <div className='product-details__content'>
         <h1 className='product-details__title'>{product.title}</h1>
         <div className='product-details__price'>₹{product.price}</div>
-        <div className='product-details__stock'>
-          Available Stock: {product.stock}
+
+        <div className='product-details__stock-wrap'>
+          {isOutOfStock ? (
+            <span className='stock-badge stock-badge--out'>Out of stock</span>
+          ) : product.stock <= 3 ? (
+            <span className='stock-badge stock-badge--low'>
+              Only {product.stock} left
+            </span>
+          ) : (
+            <span className='stock-badge stock-badge--in'>In stock</span>
+          )}
         </div>
+
         <p className='product-details__description'>{product.description}</p>
+
+        {message ? (
+          <div
+            className={`message ${
+              message.toLowerCase().includes('added')
+                ? 'message-success'
+                : 'message-error'
+            }`}
+          >
+            {message}
+          </div>
+        ) : null}
 
         <ul className='product-details__highlights'>
           <li>Secure checkout experience</li>
