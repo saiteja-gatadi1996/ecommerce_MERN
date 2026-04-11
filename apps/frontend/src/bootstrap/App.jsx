@@ -47,8 +47,8 @@ function Header() {
     <header className='site-header'>
       <div className='topbar'>
         <Link to='/' className='brand'>
-          <span className='brand__title'>CommerceHub</span>
-          <span className='brand__subtitle'>MFE Store</span>
+          <span className='brand__title'>Shopping Cart</span>
+          <span className='brand__subtitle'>Ecommerce Store</span>
         </Link>
 
         <div className='searchbar'>

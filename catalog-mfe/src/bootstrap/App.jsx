@@ -2,6 +2,18 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import '../styles/catalog.css';
 
+function getProductTitle(product) {
+  return product?.title || product?.name || 'Product';
+}
+
+function getProductDescription(product) {
+  return product?.description || 'No description available.';
+}
+
+function getProductImage(product) {
+  return product?.image || 'https://via.placeholder.com/280x280?text=Product';
+}
+
 function getCart() {
   const raw = localStorage.getItem('mf_cart');
   return raw ? JSON.parse(raw) : [];
@@ -17,8 +29,10 @@ function setCart(cart) {
 }
 
 function addToCart(product) {
+  const productTitle = getProductTitle(product);
+
   if (!product?.stock || product.stock <= 0) {
-    return { ok: false, message: 'Product is out of stock.' };
+    return { ok: false, message: `${productTitle} is out of stock.` };
   }
 
   const cart = getCart();
@@ -28,7 +42,7 @@ function addToCart(product) {
   if (existingQty + 1 > product.stock) {
     return {
       ok: false,
-      message: `Only ${product.stock} item(s) available for ${product.title}.`,
+      message: `Only ${product.stock} item(s) available for ${productTitle}.`,
     };
   }
 
@@ -37,18 +51,22 @@ function addToCart(product) {
   } else {
     cart.push({
       productId: product._id,
-      name: product.title,
+      name: productTitle,
+      description: getProductDescription(product),
+      image: getProductImage(product),
       price: product.price,
       quantity: 1,
     });
   }
 
   setCart(cart);
-  return { ok: true };
+  return { ok: true, message: `${productTitle} added to cart.` };
 }
 
 function ProductCard({ product, onAdd }) {
   const isOutOfStock = !product.stock || product.stock <= 0;
+  const productTitle = getProductTitle(product);
+  const productDescription = getProductDescription(product);
 
   return (
     <article className='catalog-card'>
@@ -58,19 +76,17 @@ function ProductCard({ product, onAdd }) {
       >
         <img
           className='catalog-card__image'
-          src={
-            product.image || 'https://via.placeholder.com/280x280?text=Product'
-          }
-          alt={product.title}
+          src={getProductImage(product)}
+          alt={productTitle}
         />
       </Link>
 
       <div className='catalog-card__body'>
         <Link to={`/products/${product._id}`} className='catalog-card__title'>
-          {product.title}
+          {productTitle}
         </Link>
 
-        <p className='catalog-card__desc'>{product.description}</p>
+        <p className='catalog-card__desc'>{productDescription}</p>
 
         <div className='catalog-card__price'>₹{product.price}</div>
 
@@ -143,13 +159,11 @@ function ProductList({ apiBaseUrl }) {
 
   function handleAdd(product) {
     const result = addToCart(product);
-    if (!result.ok) {
-      setMessage(result.message);
-      return;
-    }
+    setMessage(result.message || '');
 
-    setMessage(`${product.title} added to cart.`);
-    setTimeout(() => setMessage(''), 1800);
+    if (result.ok) {
+      setTimeout(() => setMessage(''), 1800);
+    }
   }
 
   const hasProducts = products.length > 0;
@@ -258,7 +272,7 @@ function ProductDetails({ apiBaseUrl, productId }) {
     return <div className='page-card'>Loading product details...</div>;
   }
 
-  if (message) {
+  if (message && !product) {
     return <div className='message message-error'>{message}</div>;
   }
 
@@ -267,20 +281,17 @@ function ProductDetails({ apiBaseUrl, productId }) {
   }
 
   const isOutOfStock = !product.stock || product.stock <= 0;
+  const productTitle = getProductTitle(product);
 
   function handleAdd() {
     const result = addToCart(product);
-    if (!result.ok) {
-      setMessage(result.message);
-      return;
-    }
-    setMessage(`${product.title} added to cart.`);
+    setMessage(result.message || '');
   }
 
   function handleBuyNow() {
     const result = addToCart(product);
     if (!result.ok) {
-      setMessage(result.message);
+      setMessage(result.message || '');
       return;
     }
     navigate('/checkout');
@@ -291,10 +302,8 @@ function ProductDetails({ apiBaseUrl, productId }) {
       <div className='product-details__gallery'>
         <img
           className='product-details__image'
-          src={
-            product.image || 'https://via.placeholder.com/500x500?text=Product'
-          }
-          alt={product.title}
+          src={getProductImage(product)}
+          alt={productTitle}
         />
 
         <div className='product-details__gallery-actions'>
@@ -319,7 +328,7 @@ function ProductDetails({ apiBaseUrl, productId }) {
       </div>
 
       <div className='product-details__content'>
-        <h1 className='product-details__title'>{product.title}</h1>
+        <h1 className='product-details__title'>{productTitle}</h1>
         <div className='product-details__price'>₹{product.price}</div>
 
         <div className='product-details__stock-wrap'>
@@ -334,7 +343,9 @@ function ProductDetails({ apiBaseUrl, productId }) {
           )}
         </div>
 
-        <p className='product-details__description'>{product.description}</p>
+        <p className='product-details__description'>
+          {getProductDescription(product)}
+        </p>
 
         {message ? (
           <div

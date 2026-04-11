@@ -24,6 +24,18 @@ function getTotal(cart) {
   return cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 }
 
+function getProductTitle(item) {
+  return item?.name || item?.title || 'Product';
+}
+
+function getProductDescription(item) {
+  return item?.description || 'No description available.';
+}
+
+function getProductImage(item) {
+  return item?.image || 'https://via.placeholder.com/140x140?text=Product';
+}
+
 export default function App({ apiBaseUrl }) {
   const [cart, setCartState] = useState(getCart());
   const [productsMap, setProductsMap] = useState({});
@@ -71,11 +83,16 @@ export default function App({ apiBaseUrl }) {
   const enrichedCart = useMemo(() => {
     return cart.map((item) => {
       const product = productsMap[item.productId];
+
       return {
         ...item,
+        name: item.name || product?.title || product?.name || 'Product',
+        description:
+          item.description ||
+          product?.description ||
+          'No description available.',
+        image: item.image || product?.image || '',
         stock: product?.stock ?? null,
-        image: product?.image || '',
-        title: product?.title || item.name,
       };
     });
   }, [cart, productsMap]);
@@ -110,11 +127,13 @@ export default function App({ apiBaseUrl }) {
   function validateCart() {
     for (const item of enrichedCart) {
       if (item.stock === 0) {
-        return `Product "${item.title}" is out of stock.`;
+        return `Product "${getProductTitle(item)}" is out of stock.`;
       }
 
       if (item.stock !== null && item.quantity > item.stock) {
-        return `Only ${item.stock} item(s) available for ${item.title}.`;
+        return `Only ${item.stock} item(s) available for ${getProductTitle(
+          item
+        )}.`;
       }
     }
 
@@ -151,7 +170,11 @@ export default function App({ apiBaseUrl }) {
           Authorization: `Bearer ${auth.token}`,
         },
         body: JSON.stringify({
-          items: cart,
+          items: cart.map((item) => ({
+            productId: item.productId,
+            price: item.price,
+            quantity: item.quantity,
+          })),
         }),
       });
 
@@ -190,8 +213,19 @@ export default function App({ apiBaseUrl }) {
 
               return (
                 <article key={item.productId} className='checkout-item'>
+                  <img
+                    className='checkout-item__image'
+                    src={getProductImage(item)}
+                    alt={getProductTitle(item)}
+                  />
+
                   <div className='checkout-item__info'>
-                    <div className='checkout-item__name'>{item.title}</div>
+                    <div className='checkout-item__name'>
+                      {getProductTitle(item)}
+                    </div>
+                    <p className='checkout-item__description'>
+                      {getProductDescription(item)}
+                    </p>
 
                     <div className='checkout-item__stock'>
                       {isOutOfStock ? (
