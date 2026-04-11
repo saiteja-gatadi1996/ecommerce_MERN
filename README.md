@@ -16,7 +16,7 @@ This project is a **full-stack ecommerce foundation** designed to demonstrate ho
 - **microfrontend architecture** on the frontend using Webpack 5 + Module Federation
 - **Dockerized local orchestration** for backend infrastructure and services
 
-The goal of this project is **not** to claim that it is already a full Amazon/Flipkart clone.  
+The goal of this project is **not** to claim that it is already a full Amazon or Flipkart clone.  
 The goal is to build the **core architecture and core business flow** in a realistic, production-style way so that it can later scale into a much larger commerce platform.
 
 If you are coming from a frontend background and learning backend/system design, this repository is useful because it shows how the different backend pieces connect:
@@ -131,7 +131,7 @@ But this project is intentionally structured as microservices so that it demonst
 - **product-service** owns product and stock data
 - **order-service** owns the order lifecycle
 - **payment-service** owns payment state
-- **notification-service** owns event persistence / observation
+- **notification-service** owns event persistence and observation
 - **gateway** hides internal service topology from the frontend
 
 This separation matters because it reduces coupling.
@@ -205,8 +205,16 @@ The system supports:
 - listing products
 - viewing product details
 - seeding demo products
+- updating existing seeded products by SKU
 - tracking product stock
 - decrementing stock after successful paid orders
+- richer product data with:
+
+  - name
+  - description
+  - image
+  - category
+  - SKU
 
 ### Why this matters
 
@@ -214,6 +222,37 @@ Products are not just static data here.
 They are part of a stateful commerce lifecycle.
 
 Stock changes after a successful order, which means the product service is participating in the overall business flow rather than being just a read-only catalog service.
+
+### Important seeding behavior fix
+
+During development, one issue was identified in the product seed flow:
+
+- the seed API originally used `$setOnInsert`
+- that meant existing products with the same SKU were **not updated**
+- only brand-new SKUs were inserted
+- so changing product names, images, descriptions, or stock in code did **not** reflect in the API if the SKU already existed in MongoDB
+
+This was fixed by changing the bulk upsert logic from:
+
+```js
+update: {
+  $setOnInsert: product;
+}
+```
+
+to:
+
+```js
+update: {
+  $set: product;
+}
+```
+
+This means:
+
+- existing products are updated if the SKU already exists
+- new products are inserted if the SKU does not exist
+- seed data can now safely evolve without requiring manual database cleanup every time
 
 ---
 
@@ -228,6 +267,15 @@ The frontend currently supports:
 - remove item action
 - stock-aware validation before order placement
 - richer checkout display with image, name, description, stock state, quantity, and price
+- richer cart item payload including:
+
+  - image
+  - description
+  - display name
+
+- stock-aware quantity controls in checkout
+- prevention of adding unavailable products to cart
+- better messaging for out-of-stock and low-stock products
 
 ### Why this matters
 
@@ -312,13 +360,13 @@ This models proper business sequencing.
 
 ---
 
-## 7. Notification/Event Persistence
+## 7. Notification and Event Persistence
 
 Notification service currently supports:
 
 - consuming important business events
-- storing notification/event records
-- acting as an event history/audit-style service
+- storing notification and event records
+- acting as an event history or audit-style service
 
 ### Why this matters
 
@@ -327,7 +375,7 @@ In a real system, notifications may later become:
 - email notifications
 - SMS notifications
 - push notifications
-- admin/audit activity logs
+- admin and audit activity logs
 
 Right now this service is a lightweight foundation for that future capability.
 
@@ -454,13 +502,15 @@ Implemented and working:
 - payment event publishing through RabbitMQ
 - order status updates from payment events
 - inventory stock reduction from `order.paid`
-- notification/event persistence
+- notification and event persistence
 - gateway-based routing
 - Docker Compose support
 - local non-Docker setup
 - Webpack Module Federation frontend split
-- stock-aware cart/checkout behavior
+- stock-aware cart and checkout behavior
 - CSS-based ecommerce-oriented UI refinement
+- richer product seed dataset with larger product coverage and better images
+- seed update behavior that now refreshes existing products by SKU
 
 ### What this project currently is
 
@@ -477,7 +527,7 @@ It is not yet a full marketplace product, but it is much more than a toy CRUD de
 A major strength of this project is that it was not left at “generated scaffolding.”
 A lot of real integration work was required to make it truly run.
 
-### Backend / infra fixes that were made
+### Backend and infra fixes that were made
 
 - missing shared RabbitMQ dependency issue fixed
 - local environment setup clarified
@@ -489,19 +539,23 @@ A lot of real integration work was required to make it truly run.
 - order listing route mismatch fixed
 - notification event persistence fixed
 - product inventory consumption flow fixed
+- product seed logic fixed so existing seeded products update correctly by SKU
+- product image dataset improved so catalog items no longer reuse the same image repeatedly
 
-### Frontend / MFE fixes that were made
+### Frontend and MFE fixes that were made
 
 - package startup script mismatches fixed
 - missing local webpack installations fixed
 - Babel JSX configuration fixed
-- Module Federation bootstrap/eager shared dependency issue fixed
+- Module Federation bootstrap and eager shared dependency issue fixed
 - host rendering flow fixed
 - details route rendering fixed
 - MFE CSS-based UI improved
 - cart sync improved
 - checkout item identity improved
 - stock-aware UX improved
+- local cart payload enriched with product name, description, and image for better checkout rendering
+- checkout UX improved to clearly show item image, item name, item description, quantity, stock state, and item-level validation
 
 This matters because it shows that the project was not just “written,” it was actually **debugged, corrected, and stabilized**.
 
@@ -527,8 +581,98 @@ Optional but recommended:
 
 ## Run with Docker
 
+```bash
 docker compose down
 docker compose up --build
+```
+
+### Stop Docker setup
+
+```bash
+docker compose down
+```
+
+### Rebuild after changes
+
+```bash
+docker compose down
+docker compose up --build
+```
+
+### Check running containers
+
+```bash
+docker compose ps
+```
+
+### Check service logs
+
+```bash
+docker compose logs --tail=200 user-service product-service order-service payment-service notification-service gateway frontend rabbitmq
+```
+
+---
+
+## Docker Notes and Common Issue
+
+### Obsolete `version` warning in `docker-compose.yml`
+
+You may see this warning:
+
+```bash
+the attribute `version` is obsolete, it will be ignored
+```
+
+This warning is harmless.
+
+It happens because newer Docker Compose versions no longer require the top-level `version:` field.
+
+For example, this line can be removed safely:
+
+```yaml
+version: '3.9'
+```
+
+Removing it avoids confusion, but it is **not** the reason Docker fails.
+
+---
+
+### If `docker compose` fails with `docker.sock` error
+
+You may see an error like:
+
+```bash
+failed to connect to the docker API ... docker.sock ... no such file or directory
+```
+
+This means Docker Desktop or Docker daemon is not currently running.
+
+#### Fix
+
+1. Open **Docker Desktop**
+2. Wait until Docker finishes starting
+3. Verify with:
+
+```bash
+docker ps
+```
+
+4. Then run:
+
+```bash
+docker compose down
+docker compose up --build
+```
+
+#### Important note
+
+If you are running the app locally without Docker using:
+
+```bash
+npm run dev
+```
+
+then Docker does **not** need to be running for the local setup path.
 
 ---
 
@@ -549,7 +693,7 @@ That requires manually starting:
 
 From the project root:
 
-```bash id="tqne4m"
+```bash
 npm run dev
 ```
 
@@ -617,7 +761,7 @@ This is why local `.env` values and Docker `.env` values are not always intercha
 
 ---
 
-## API / Flow Summary
+## API and Flow Summary
 
 ## Auth
 
@@ -630,6 +774,7 @@ This is why local `.env` values and Docker `.env` values are not always intercha
 - seed products
 - list products
 - get product by id
+- update existing products by SKU through seed flow
 - decrement stock after order is paid
 
 ## Orders
@@ -704,36 +849,36 @@ ecommerce_MERN/
 
 This section is important because it clearly shows what still remains from the original final prompt or from a true production-grade ecommerce system.
 
-### Backend / platform gaps
+### Backend and platform gaps
 
 Not yet implemented:
 
 - real payment gateway integration
-- refresh token / session rotation flow
+- refresh token or session rotation flow
 - admin dashboard and admin APIs
 - advanced role-based authorization
-- coupon / promo / discount engine
+- coupon, promo, and discount engine
 - wishlist
 - reviews and ratings
-- returns / refunds
-- shipment / delivery tracking
-- address book / saved addresses
+- returns and refunds
+- shipment and delivery tracking
+- address book or saved addresses
 - Redis caching
-- Elasticsearch / OpenSearch
+- Elasticsearch or OpenSearch
 - centralized logging and observability
 - distributed tracing
-- Swagger / OpenAPI docs
+- Swagger or OpenAPI docs
 - CI/CD pipelines
 - API contract testing
-- DLQ / stronger failure handling / advanced saga-style orchestration
-- production deployment manifests like Kubernetes / Helm / Terraform
+- dead-letter queue support and stronger failure-handling orchestration
+- production deployment manifests like Kubernetes, Helm, or Terraform
 
-### Frontend / product gaps
+### Frontend and product gaps
 
 Not yet implemented:
 
 - refined search UX
-- sorting / filters sidebar
+- sorting and filters sidebar
 - category landing pages
 - recommendation carousels
 - reviews and rating UI
@@ -742,8 +887,8 @@ Not yet implemented:
 - admin management UI
 - advanced responsive polish
 - shared UI design system across remotes
-- toasts/snackbars for all actions
-- skeleton loaders / shimmer states
+- toasts or snackbars for all actions
+- skeleton loaders and shimmer states
 - more realistic marketplace-style product enrichment
 
 ### Architecture maturity gaps
@@ -752,7 +897,7 @@ Not yet implemented:
 
 - auth refresh flow
 - request tracing across services
-- retry / backoff strategy beyond startup connection handling
+- retry or backoff strategy beyond startup connection handling
 - centralized metrics
 - feature flagging
 - proper environment secret management for production hosting
@@ -772,12 +917,13 @@ If this project is extended further, these are the highest-value next steps:
 4. add Redis caching
 5. add search, filters, and sorting
 6. add centralized logs and tracing
-7. add Swagger/OpenAPI documentation
+7. add Swagger or OpenAPI documentation
 8. add automated integration tests for cross-service flows
-9. replace polling with SSE/WebSockets
+9. replace polling with SSE or WebSockets
 10. add better dead-letter and failure-handling patterns
-11. add deployment support for Railway / Vercel / cloud hosting
+11. add deployment support for Railway, Vercel, or cloud hosting
 12. improve the microfrontend design consistency with a shared design system
+13. move product seed data into a dedicated seed or admin workflow for easier maintenance
 
 ---
 
@@ -794,7 +940,7 @@ Likely causes:
 
 Check:
 
-```bash id="ho2nx9"
+```bash
 docker compose logs payment-service order-service notification-service --tail=200
 ```
 
@@ -802,7 +948,7 @@ docker compose logs payment-service order-service notification-service --tail=20
 
 Check:
 
-```bash id="nkr7vl"
+```bash
 docker compose ps
 docker compose logs --tail=200 user-service product-service order-service payment-service notification-service rabbitmq
 ```
@@ -817,9 +963,9 @@ Retry logic in the shared event-bus package is important here.
 Likely causes:
 
 - MFE startup script issues
-- Webpack/Babel config issues
+- Webpack and Babel config issues
 - Module Federation bootstrap issue
-- host/remote misconfiguration
+- host or remote misconfiguration
 
 ### Cart or checkout behaves incorrectly
 
@@ -828,7 +974,7 @@ Check:
 - cart payload in local storage
 - stock values in `/api/products`
 - quantity validation in checkout UI
-- backend stock validation in product/order flow
+- backend stock validation in product and order flow
 
 ### Gateway works but frontend APIs do not
 
@@ -839,6 +985,47 @@ Check:
 - auth headers
 - request body forwarding
 - backend route compatibility
+
+### Seed API changes do not reflect in products
+
+Likely causes:
+
+- MongoDB already contains products with the same SKUs
+- older seed logic used `$setOnInsert`, so existing products were not updated
+- Docker volumes or local Mongo data still contain older product records
+
+#### Fix
+
+Use seed logic with `$set` instead of `$setOnInsert` so products update by SKU.
+
+Then call:
+
+```bash
+curl -X POST http://localhost:8080/api/products/seed
+```
+
+If you need a full Docker reset:
+
+```bash
+docker compose down -v
+docker compose up --build
+```
+
+This removes Docker volumes and starts MongoDB fresh.
+
+### Product images look wrong or repetitive
+
+Likely causes:
+
+- multiple products are reusing the same placeholder or repeated image URL
+- older seed data is still stored in MongoDB
+- seed changes were not reflected because existing products were not updated
+
+#### Fix
+
+- improve image URLs in seed data
+- reseed products after updating the controller
+- if necessary, clear old MongoDB data and seed again
 
 ---
 
@@ -854,19 +1041,16 @@ What it successfully proves today:
 - MongoDB-per-service ownership
 - RabbitMQ event-driven communication
 - async payment → order → inventory flow
-- notification/event persistence
+- notification and event persistence
 - Dockerized local orchestration
 - local non-Docker development
 - Webpack Module Federation frontend split
 - product listing + product details
 - cart persistence
-- checkout with quantity/stock awareness
+- checkout with quantity and stock awareness
 - polling-based order state visibility
+- richer seed dataset with update-safe SKU behavior
 
 This makes the project much more than a simple CRUD application.
 
 It is a strong **full-stack architecture foundation** that helps explain how frontend, backend, messaging, state transitions, and service boundaries all connect in a real-world commerce workflow.
-
-```
-
-```
